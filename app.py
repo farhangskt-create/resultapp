@@ -1,30 +1,33 @@
 import streamlit as st
 import pdfplumber
 import pandas as pd
+import os
 
 st.set_page_config(page_title="BISE Result Gazette Search App", page_icon="📚", layout="wide")
 
 st.markdown("<h2 style='text-align: center;'>BISE Result Gazette Search App</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'><b>Search Student Results by Roll Number or School Code from PDF Gazette</b></p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'><b>Search Student Results by Roll Number or School Code</b></p>", unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload Result Gazette (PDF)", type=["pdf"])
+# گٹ ہب میں موجود مستقل گزیٹ فائل کا پاتھ
+GAZETTE_PATH = "gazette.pdf"
 
-if uploaded_file is not None:
+if not os.path.exists(GAZETTE_PATH):
+    st.error("⚠️ Official Gazette PDF is not uploaded in the repository yet. Please upload 'gazette.pdf' to GitHub.")
+else:
     @st.cache_data
-    def load_pdf_text(file):
+    def load_pdf_text(file_path):
         extracted_text = []
-        with pdfplumber.open(file) as pdf:
+        with pdfplumber.open(file_path) as pdf:
             for page in pdf.pages:
                 text = page.extract_text()
                 if text:
                     extracted_text.extend(text.split('\n'))
         return extracted_text
 
-    with st.spinner("Extracting text from PDF Gazette, please wait..."):
-        pdf_lines = load_pdf_text(uploaded_file)
+    with st.spinner("Loading Gazette database, please wait..."):
+        pdf_lines = load_pdf_text(GAZETTE_PATH)
     
-    st.success(f"Gazette loaded successfully! Total lines found: {len(pdf_lines):,}")
-
+    # سرچ انٹرفیس (صارفین کے لیے صرف سرچ باکس ہوگا)
     search_type = st.radio("Select Search Method:", ["Search by Roll Number", "Search by School Code / Name"])
 
     if search_type == "Search by Roll Number":
@@ -47,12 +50,10 @@ if uploaded_file is not None:
             if school_query:
                 school_results = [line for line in pdf_lines if school_query.lower() in line.lower()]
                 if school_results:
-                    st.subheader(f"Students found for: {school_query} (Total lines: {len(school_results)})")
+                    st.subheader(f"Students found for: {school_query} (Total records: {len(school_results)})")
                     for line in school_results:
                         st.write(line)
                 else:
                     st.warning("No records found matching this School Code or Name.")
             else:
                 st.error("Please enter a School Code or Name.")
-else:
-    st.info("👆 براہ کرم ٹیسٹنگ کے لیے کوئی بھی پرانا رزلٹ گزیٹ (PDF) یہاں اپ لوڈ کریں۔")
