@@ -1,90 +1,93 @@
 import streamlit as st
 import pdfplumber
+import pandas as pd
+import os
 
-st.set_page_config(page_title="BISE Result Gazette Search App", page_icon="📚", layout="wide")
+st.set_page_config(page_title="BISE Result Gazette Search App (Pandas Powered)", page_icon="📊", layout="wide")
 
-st.markdown("<h2 style='text-align: center;'>📚 BISE Result Gazette Search App</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'><b>Instant Search by Roll Number or School Code from PDF Gazette</b></p>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center;'>📊 BISE Result Gazette Search App (Pandas Engine)</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'><b>Lightning-Fast Search using Pandas DataFrames</b></p>", unsafe_allow_html=True)
 
-# فائل اپ لوڈ کرنے کا سیکشن
-uploaded_file = st.file_uploader("Upload Result Gazette (PDF)", type=["pdf"])
+default_pdf_path = "gazette.pdf"
 
-if uploaded_file is not None:
-    # کیشنگ (Caching) کی مدد سے پی ڈی ایف کو صرف ایک بار ریڈ کیا جائے گا تاکہ یہ بالکل سلو نہ ہو
-    @st.cache_data
-    def load_gazette_data(file_bytes):
-        results_map = {}
-        school_map = {}
-        with pdfplumber.open(file_bytes) as pdf:
+@st.cache_data
+def load_gazette_with_pandas(pdf_path):
+    data_rows = []
+    
+    if os.path.exists(pdf_path):
+        with pdfplumber.open(pdf_path) as pdf:
             for page_num, page in enumerate(pdf.pages):
                 text = page.extract_text()
                 if text:
                     for line in text.split('\n'):
                         line_clean = line.strip()
                         if line_clean:
-                            # لائن کو اسٹور کرنا
-                            # فرض کریں رول نمبر لائن کے شروع میں ہے (پہلا لفظ یا ڈیجٹ)
                             words = line_clean.split()
                             if words:
                                 roll_candidate = words[0]
+                                # اگر پہلا لفظ رول نمبر (ڈیجٹ) ہے
                                 if roll_candidate.isdigit() and len(roll_candidate) >= 5:
-                                    results_map[roll_candidate] = line_clean
-                            # اسکول کوڈ یا نام کے لیے پوری لائن کو محفوظ کرنا
-                            school_map.setdefault("all_lines", []).append(line_clean)
-        return results_map, school_map
+                                    data_rows.append({
+                                        "RollNo": roll_candidate,
+                                        "Record": line_clean
+                                    })
+                                else:
+                                    # باقی لائنیں (جیسے اسکول کا نام یا دیگر تفصیلات)
+                                    data_rows.append({
+                                        "RollNo": "INFO",
+                                        "Record": line_clean
+                                    })
+                                    
+    # Pandas DataFrame بنانا
+    df = pd.DataFrame(data_rows)
+    return df
 
-    with st.spinner("Processing Gazette efficiently, please wait a moment..."):
-        # بائٹس کے ذریعے تیز رفتار پروسیسنگ
-        file_bytes = uploaded_file.getvalue()
-        results_map, school_data = load_gazette_data(file_bytes)
+if os.path.exists(default_pdf_path):
+    with st.spinner("Processing Gazette with Pandas, please wait..."):
+        df_gazette = load_gazette_with_pandas(default_pdf_path)
     
-    st.success("Gazette indexed successfully! Fast search is now ready.")
+    st.success(f"Pandas Database Ready! Total processed lines: {len(df_gazette):,}")
 
     search_type = st.radio("Select Search Method:", ["Search by Roll Number", "Search by School Code"])
 
     if search_type == "Search by Roll Number":
-        col1, col2 = st.form("roll_form") if False else st.columns([3, 1])
-        with col1:
-            roll_no = st.text_input("Enter Roll Number (e.g., 123456):")
-        
+        roll_no = st.text_input("Enter Roll Number (e.g., 123456):")
         if st.button("Search Roll Number", type="primary"):
             if roll_no:
-                if roll_no in results_map:
+                # Pandas کی مدد سے فوری فلٹرنگ
+                matched_df = df_gazette[df_gazette['RollNo'] == roll_no]
+                
+                if not matched_df.empty:
                     st.subheader("🎯 Student Result Found:")
-                    st.success(results_map[roll_no])
+                    for idx, row in matched_df.iterrows():
+                        st.success(row['Record'])
                 else:
-                    # اگر ڈائریکت کی نہ ملے تو لکی سرچ
-                    matched = [line for line in school_data.get("all_lines", []) if roll_no in line]
-                    if matched:
+                    # اگر ڈائریکٹ میچ نہ ہو تو پوری ریکارڈ لائنز میں سرچ کریں
+                    sub_matched = df_gazette[df_gazette['Record'].str.contains(roll_no, case=False, na=False)]
+                    if not sub_matched.empty:
                         st.subheader("🎯 Search Result:")
-                        for m in matched:
-                            st.info(m)
+                        for idx, row in sub_matched.iterrows():
+                            st.info(row['Record'])
                     else:
                         st.warning("No record found against this Roll Number.")
             else:
                 st.error("Please enter a valid Roll Number.")
 
     elif search_type == "Search by School Code":
-        school_code = st.text_input("Enter School Code / Institution Keyword:")
+        school_code = st.text_input("Enter School Code / Keyword:")
         if st.button("Search School Students", type="primary"):
             if school_code:
-                all_lines = school_data.get("all_lines", [])
-                matched_lines = [line for line in all_lines if school_code.lower() in line.lower()]
+                # Pandas کے ذریعے اسکول کوڈ یا نام تلاش کرنا
+                school_matched = df_gazette[df_gazette['Record'].str.contains(school_code, case=False, na=False)]
                 
-                if matched_lines:
-                    st.subheader(f"🏫 Found {len(matched_lines)} records for: {school_code}")
-                    # نتائج کو صاف ستھرے ٹیبل یا بکس میں دکھانا
-                    for line in matched_lines[:100]: # زیادہ بوجھ سے بچنے کے لیے پہلے 100 نتائج
-                        st.write(f"- {line}")
-                    if len(matched_lines) > 100:
-                        st.info("Showing first 100 matching results.")
+                if not school_matched.empty:
+                    st.subheader(f"🏫 Found {len(school_matched)} matching records for: {school_code}")
+                    # Pandas کا خوبصورت ٹیبل شو کرنا
+                    st.dataframe(school_matched[['Record']], use_container_width=True)
                 else:
                     st.warning("No records found matching this School Code.")
             else:
                 st.error("Please enter a School Code.")
 
 else:
-    st.info("👆 براہ کرم رزلٹ گزیٹ (PDF) یہاں اپ لوڈ کریں۔")
-
-st.markdown("---")
-                    
+    st.error(f"⚠️ Error: Default gazette file ('{default_pdf_path}') not found in GitHub repository.")
