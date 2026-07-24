@@ -3,20 +3,21 @@ import pdfplumber
 import pandas as pd
 import os
 
-st.set_page_config(page_title="BISE Result Gazette Search App (Pandas Powered)", page_icon="📊", layout="wide")
+st.set_page_config(page_title="BISE Result Search Portal", page_icon="🎓", layout="wide")
 
-st.markdown("<h2 style='text-align: center;'>📊 BISE Result Gazette Search App (Pandas Engine)</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'><b>Lightning-Fast Search using Pandas DataFrames</b></p>", unsafe_allow_html=True)
+# صاف ستھرا اور سادہ ہیڈر
+st.markdown("<h2 style='text-align: center;'>🎓 BISE Result Search Portal</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'><b>Fast & Direct Gazette Search System</b></p>", unsafe_allow_html=True)
 
 default_pdf_path = "gazette.pdf"
 
+# بیک گراؤنڈ میں تیز رفتار ڈیٹا ریڈنگ اور کیشنگ
 @st.cache_data
-def load_gazette_with_pandas(pdf_path):
-    data_rows = []
-    
+def load_gazette_fast(pdf_path):
+    records = []
     if os.path.exists(pdf_path):
         with pdfplumber.open(pdf_path) as pdf:
-            for page_num, page in enumerate(pdf.pages):
+            for page in pdf.pages:
                 text = page.extract_text()
                 if text:
                     for line in text.split('\n'):
@@ -25,69 +26,73 @@ def load_gazette_with_pandas(pdf_path):
                             words = line_clean.split()
                             if words:
                                 roll_candidate = words[0]
-                                # اگر پہلا لفظ رول نمبر (ڈیجٹ) ہے
-                                if roll_candidate.isdigit() and len(roll_candidate) >= 5:
-                                    data_rows.append({
-                                        "RollNo": roll_candidate,
-                                        "Record": line_clean
-                                    })
-                                else:
-                                    # باقی لائنیں (جیسے اسکول کا نام یا دیگر تفصیلات)
-                                    data_rows.append({
-                                        "RollNo": "INFO",
-                                        "Record": line_clean
-                                    })
-                                    
-    # Pandas DataFrame بنانا
-    df = pd.DataFrame(data_rows)
-    return df
+                                records.append({
+                                    "RollNo": roll_candidate,
+                                    "Record": line_clean
+                                })
+    return pd.DataFrame(records)
 
+# فائل لوڈنگ
 if os.path.exists(default_pdf_path):
-    with st.spinner("Processing Gazette with Pandas, please wait..."):
-        df_gazette = load_gazette_with_pandas(default_pdf_path)
-    
-    st.success(f"Pandas Database Ready! Total processed lines: {len(df_gazette):,}")
+    with st.spinner("Loading Gazette in background..."):
+        df = load_gazette_fast(default_pdf_path)
 
-    search_type = st.radio("Select Search Method:", ["Search by Roll Number", "Search by School Code"])
+    # صرف مطلوبہ دو آپشنز
+    search_option = st.radio("Select Search Type:", ["Search by Roll Number", "Search by Institution Code / School Name"])
+    st.markdown("---")
 
-    if search_type == "Search by Roll Number":
-        roll_no = st.text_input("Enter Roll Number (e.g., 123456):")
-        if st.button("Search Roll Number", type="primary"):
-            if roll_no:
-                # Pandas کی مدد سے فوری فلٹرنگ
-                matched_df = df_gazette[df_gazette['RollNo'] == roll_no]
+    if search_option == "Search by Roll Number":
+        roll_input = st.text_input("Enter Roll Number:")
+        if st.button("Search Result", type="primary"):
+            if roll_input:
+                # رول نمبر تلاش کرنا
+                result_row = df[df['RollNo'] == roll_input]
                 
-                if not matched_df.empty:
-                    st.subheader("🎯 Student Result Found:")
-                    for idx, row in matched_df.iterrows():
-                        st.success(row['Record'])
+                if not result_row.empty:
+                    st.subheader("📋 Student Result Details:")
+                    for _, row in result_row.iterrows():
+                        full_line = row['Record']
+                        st.success(full_line)
+                        
+                        # پاس یا فیل چیک کرنے کی لاجک (گزیٹ کے الفاظ کے مطابق)
+                        lower_text = full_line.lower()
+                        if "fail" in lower_text or "f" in words_checker(lower_text):
+                            st.warning("⚠️ **Better luck next time!** Work harder for the next attempt.")
+                        else:
+                            st.balloons()
+                            st.success("🎉 **Congratulations!** You have successfully passed the examination.")
                 else:
-                    # اگر ڈائریکٹ میچ نہ ہو تو پوری ریکارڈ لائنز میں سرچ کریں
-                    sub_matched = df_gazette[df_gazette['Record'].str.contains(roll_no, case=False, na=False)]
-                    if not sub_matched.empty:
-                        st.subheader("🎯 Search Result:")
-                        for idx, row in sub_matched.iterrows():
+                    # اگر ایگزیکٹ میچ نہ ہو تو لائن کے اندر سرچ
+                    sub_match = df[df['Record'].str.contains(roll_input, case=False, na=False)]
+                    if not sub_match.empty:
+                        st.subheader("📋 Search Result:")
+                        for _, row in sub_match.iterrows():
                             st.info(row['Record'])
+                            st.success("🎉 **Congratulations!**")
                     else:
-                        st.warning("No record found against this Roll Number.")
+                        st.error("No record found against this Roll Number.")
             else:
-                st.error("Please enter a valid Roll Number.")
+                st.warning("Please enter a valid Roll Number.")
 
-    elif search_type == "Search by School Code":
-        school_code = st.text_input("Enter School Code / Keyword:")
-        if st.button("Search School Students", type="primary"):
-            if school_code:
-                # Pandas کے ذریعے اسکول کوڈ یا نام تلاش کرنا
-                school_matched = df_gazette[df_gazette['Record'].str.contains(school_code, case=False, na=False)]
+    else: # اسکول کوڈ یا نام کے ذریعے سرچ
+        school_input = st.text_input("Enter School Code or Name:")
+        if st.button("Search School Gazette List", type="primary"):
+            if school_input:
+                school_matches = df[df['Record'].str.contains(school_input, case=False, na=False)]
                 
-                if not school_matched.empty:
-                    st.subheader(f"🏫 Found {len(school_matched)} matching records for: {school_code}")
-                    # Pandas کا خوبصورت ٹیبل شو کرنا
-                    st.dataframe(school_matched[['Record']], use_container_width=True)
+                if not school_matches.empty:
+                    st.subheader(f"🏫 Institution Results (Total Records: {len(school_matches)})")
+                    # گزیٹ کی طرح ہو بہو لسٹ دکھانا
+                    for idx, row in school_matches.iterrows():
+                        st.text(row['Record']) # گزیٹ فارمیٹ کے لیے st.text بہترین ہے
                 else:
-                    st.warning("No records found matching this School Code.")
+                    st.warning("No records found matching this School Code or Name.")
             else:
-                st.error("Please enter a School Code.")
+                st.warning("Please enter a School Code or Name.")
 
 else:
-    st.error(f"⚠️ Error: Default gazette file ('{default_pdf_path}') not found in GitHub repository.")
+    st.error("⚠️ Error: 'gazette.pdf' file is missing in the GitHub repository. Please upload it.")
+
+# ہیلپر فنکشن
+def words_checker(text):
+    return text.split()
