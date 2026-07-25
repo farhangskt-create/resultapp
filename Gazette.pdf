@@ -1,0 +1,5 @@
+import json
+
+with open("results_2025.json", "r") as file:
+    data = json.load(file)
+    
