@@ -1,0 +1,20 @@
+[
+    {
+        "roll_number": "500123",
+        "institution_code": "1122",
+        "name": "Ahmed Raza",
+        "result": "Pass"
+    },
+    {
+        "roll_number": "500124",
+        "institution_code": "1122",
+        "name": "Usman Tariq",
+        "result": "Fail"
+    },
+    {
+        "roll_number": "500999",
+        "institution_code": "3344",
+        "name": "Fatima Noor",
+        "result": "Pass"
+    }
+]
