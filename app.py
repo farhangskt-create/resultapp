@@ -108,4 +108,4 @@ if os.path.exists(pdf_path):
                 st.warning("Please enter a School Code or Name.")
 
 else:
-    st.error("⚠️ Error: 'gazette.pdf' file is missing in the GitHub repository. Please upload it.")
+    st.error("⚠️ Error: 'gazette.pdf' file is missing in the GitHub repository. Please upload it..")
